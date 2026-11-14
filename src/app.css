@@ -314,6 +314,59 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
 }
 .tf-score-stats b { display: block; color: var(--text); font-size: 11.5px; font-weight: 800; }
 
+/* Card header row: keep the collapse control out of the way of the kicker. */
+.tf-score-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tf-score-head .tf-score-kicker { flex: 1 1 auto; }
+.tf-score-toggle {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.tf-score-toggle:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
+.tf-score-toggle:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.tf-score-chevron { display: inline-grid; place-items: center; }
+.tf-score-chevron svg { width: 15px; height: 15px; display: block; }
+.tf-score-chevron.is-open { transform: rotate(180deg); }
+.tf-score-body { min-width: 0; }
+
+/* Collapsed: the whole card is one summary row, so the settings get the height. */
+.tf-score-card.is-collapsed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  margin: 11px 18px 9px;
+  padding: 8px 10px 8px 12px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.tf-score-card.is-collapsed:hover { border-color: rgba(62, 232, 255, 0.34); }
+.tf-score-card.is-collapsed:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.tf-score-card.is-collapsed .tf-pill { font-size: 9px; padding: 2px 7px; }
+.tf-score-collapsed-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.tf-score-collapsed-meta { flex: 0 0 auto; color: var(--muted-2); font-size: 10px; white-space: nowrap; }
+
 /* ------------------------------------------------------------------ tabs */
 .tf-tabs {
   display: grid;

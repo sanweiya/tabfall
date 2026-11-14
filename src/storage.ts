@@ -9,6 +9,40 @@ import {
 } from '../core/types';
 
 const STORAGE_KEY = 'tabfall.settings.v1';
+/** UI-only preferences that must not travel through the project settings. */
+const UI_KEY = 'tabfall.ui.v1';
+
+interface UiState {
+  /** The score card in the sidebar collapsed to a single summary row. */
+  scoreCardCollapsed?: boolean;
+}
+
+function loadUiState(): UiState {
+  try {
+    const raw = localStorage.getItem(UI_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as UiState;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveUiState(patch: UiState): void {
+  try {
+    localStorage.setItem(UI_KEY, JSON.stringify({ ...loadUiState(), ...patch }));
+  } catch {
+    // Quota or privacy mode: layout preferences are a convenience, never a blocker.
+  }
+}
+
+export function loadScoreCardCollapsed(): boolean {
+  return loadUiState().scoreCardCollapsed === true;
+}
+
+export function saveScoreCardCollapsed(collapsed: boolean): void {
+  saveUiState({ scoreCardCollapsed: collapsed });
+}
 
 export function defaultSettings(): ProjectSettings {
   return JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as ProjectSettings;

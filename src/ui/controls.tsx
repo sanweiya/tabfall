@@ -278,4 +278,5 @@ export const Icons = {
   close: <Icon path={<><path d="m6 6 12 12M18 6 6 18" /></>} />,
   reset: <Icon path={<><path d="M4 4v6h6" /><path d="M5.5 10A7 7 0 1 1 5 15" /></>} />,
   eye: <Icon path={<><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.6" /></>} />,
+  chevron: <Icon path={<path d="m6 9.5 6 6 6-6" />} />,
 };

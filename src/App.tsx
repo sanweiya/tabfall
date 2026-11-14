@@ -20,8 +20,10 @@ import {
   formatBytes,
   formatClock,
   formatResolution,
+  loadScoreCardCollapsed,
   loadSettings,
   resolutionId,
+  saveScoreCardCollapsed,
   saveSettings,
 } from './storage';
 
@@ -66,6 +68,8 @@ function ScoreCard(props: {
   loaded: LoadedScore | null;
   trackIndex: number;
   fileName: string;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   onTrack: (index: number) => void;
   onSeek: (ms: number) => void;
   status: AppStatus;
@@ -84,49 +88,90 @@ function ScoreCard(props: {
   }
   const track = loaded.tracks.find((entry) => entry.info.index === props.trackIndex);
   const noteCount = track?.notes.length ?? 0;
+  const title = loaded.meta.title || '未命名曲谱';
+  const backingPill = (
+    <span className={`tf-pill ${loaded.meta.hasBackingTrack ? 'is-good' : ''}`}>
+      {loaded.meta.hasBackingTrack ? '内置伴奏' : '合成音轨'}
+    </span>
+  );
+  if (props.collapsed) {
+    // One row, so the settings panels below get their vertical space back while
+    // dialling things in. The whole row is the toggle.
+    return (
+      <button
+        type="button"
+        className="tf-score-card is-collapsed"
+        onClick={props.onToggleCollapsed}
+        aria-expanded={false}
+        aria-controls="tf-score-body"
+        aria-label={`展开曲谱信息：${title}`}
+        title="展开曲谱信息"
+      >
+        {backingPill}
+        <span className="tf-score-collapsed-title">{title}</span>
+        <span className="tf-score-collapsed-meta">
+          {Math.round(loaded.meta.tempo)} BPM · {formatClock(loaded.meta.durationMs)}
+        </span>
+        <span className="tf-score-chevron" aria-hidden="true">{Icons.chevron}</span>
+      </button>
+    );
+  }
   return (
     <div className="tf-score-card">
-      <div className="tf-score-kicker">
-        <span className={`tf-pill ${loaded.meta.hasBackingTrack ? 'is-good' : ''}`}>
-          {loaded.meta.hasBackingTrack ? '内置伴奏' : '合成音轨'}
-        </span>
-        <span className="tf-score-file" title={props.fileName}>{props.fileName || '未命名曲谱'}</span>
-      </div>
-      <h2>{loaded.meta.title || '未命名曲谱'}</h2>
-      <p className="tf-score-artist">{loaded.meta.artist || '未知艺术家'}{loaded.meta.album ? ` · ${loaded.meta.album}` : ''}</p>
-      <div className="tf-score-stats">
-        <span><b>{Math.round(loaded.meta.tempo)}</b> BPM</span>
-        <span><b>{loaded.meta.barCount}</b> 小节</span>
-        <span><b>{formatClock(loaded.meta.durationMs)}</b> 时长</span>
-        <span><b>{noteCount.toLocaleString()}</b> 音符</span>
-      </div>
-      <Select
-        label="轨道"
-        value={props.trackIndex}
-        options={loaded.meta.tracks.map((trackInfo) => {
-          const lane = loaded.tracks.find((entry) => entry.info.index === trackInfo.index);
-          const first = lane?.notes[0]?.timeMs ?? 0;
-          const firstLabel = first > 5000 ? ` · ${formatClock(first)} 起` : '';
-          return {
-            value: trackInfo.index,
-            label: `${trackInfo.name}${trackInfo.isStringed ? ` · ${trackInfo.stringCount} 弦` : ' · 非弦乐'} · ${lane?.notes.length ?? 0} 音${firstLabel}`,
-          };
-        })}
-        onChange={props.onTrack}
-      />
-      {track && track.notes.length > 0 && track.notes[0].timeMs > 3000 && (
+      <div className="tf-score-head">
+        <div className="tf-score-kicker">
+          {backingPill}
+          <span className="tf-score-file" title={props.fileName}>{props.fileName || '未命名曲谱'}</span>
+        </div>
         <button
           type="button"
-          className="tf-jump"
-          onClick={() => props.onSeek(Math.max(0, track.notes[0].timeMs - 1200))}
+          className="tf-score-toggle"
+          onClick={props.onToggleCollapsed}
+          aria-expanded={true}
+          aria-controls="tf-score-body"
+          aria-label="折叠曲谱信息"
+          title="折叠曲谱信息，给下面的设置腾地方"
         >
-          <span>{Icons.play}</span>
-          跳到首音 · {formatClock(track.notes[0].timeMs)}
+          <span className="tf-score-chevron is-open" aria-hidden="true">{Icons.chevron}</span>
         </button>
-      )}
-      {track && !track.info.isStringed && (
-        <p className="tf-hint is-warn">这个轨道不是弦乐器，仍会按单弦投影显示，建议换用吉他 / 贝斯轨道。</p>
-      )}
+      </div>
+      <div className="tf-score-body" id="tf-score-body">
+        <h2>{title}</h2>
+        <p className="tf-score-artist">{loaded.meta.artist || '未知艺术家'}{loaded.meta.album ? ` · ${loaded.meta.album}` : ''}</p>
+        <div className="tf-score-stats">
+          <span><b>{Math.round(loaded.meta.tempo)}</b> BPM</span>
+          <span><b>{loaded.meta.barCount}</b> 小节</span>
+          <span><b>{formatClock(loaded.meta.durationMs)}</b> 时长</span>
+          <span><b>{noteCount.toLocaleString()}</b> 音符</span>
+        </div>
+        <Select
+          label="轨道"
+          value={props.trackIndex}
+          options={loaded.meta.tracks.map((trackInfo) => {
+            const lane = loaded.tracks.find((entry) => entry.info.index === trackInfo.index);
+            const first = lane?.notes[0]?.timeMs ?? 0;
+            const firstLabel = first > 5000 ? ` · ${formatClock(first)} 起` : '';
+            return {
+              value: trackInfo.index,
+              label: `${trackInfo.name}${trackInfo.isStringed ? ` · ${trackInfo.stringCount} 弦` : ' · 非弦乐'} · ${lane?.notes.length ?? 0} 音${firstLabel}`,
+            };
+          })}
+          onChange={props.onTrack}
+        />
+        {track && track.notes.length > 0 && track.notes[0].timeMs > 3000 && (
+          <button
+            type="button"
+            className="tf-jump"
+            onClick={() => props.onSeek(Math.max(0, track.notes[0].timeMs - 1200))}
+          >
+            <span>{Icons.play}</span>
+            跳到首音 · {formatClock(track.notes[0].timeMs)}
+          </button>
+        )}
+        {track && !track.info.isStringed && (
+          <p className="tf-hint is-warn">这个轨道不是弦乐器，仍会按单弦投影显示，建议换用吉他 / 贝斯轨道。</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -346,6 +391,7 @@ export function App(): React.ReactElement {
   const [exportState, setExportState] = React.useState<ExportUi>(IDLE_EXPORT);
   const [volume, setVolume] = React.useState(0.85);
   const [viewport, setViewport] = React.useState({ width: 0, height: 0 });
+  const [scoreCardCollapsed, setScoreCardCollapsed] = React.useState(() => loadScoreCardCollapsed());
 
   const hostRef = React.useRef<HTMLDivElement | null>(null);
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
@@ -520,6 +566,14 @@ export function App(): React.ReactElement {
   }, [notify]);
 
   const openFilePicker = React.useCallback(() => fileInputRef.current?.click(), []);
+
+  const toggleScoreCard = React.useCallback(() => {
+    setScoreCardCollapsed((previous) => {
+      const next = !previous;
+      saveScoreCardCollapsed(next);
+      return next;
+    });
+  }, []);
 
   const loadFile = React.useCallback((file: File) => {
     // Swapping the score mid-render would leave the exporter drawing the old
@@ -748,7 +802,16 @@ export function App(): React.ReactElement {
 
       <main className="tf-main">
         <aside className="tf-sidebar">
-          <ScoreCard loaded={loaded} trackIndex={trackIndex} fileName={fileName} onTrack={changeTrack} onSeek={seek} status={status} />
+          <ScoreCard
+            loaded={loaded}
+            trackIndex={trackIndex}
+            fileName={fileName}
+            collapsed={scoreCardCollapsed}
+            onToggleCollapsed={toggleScoreCard}
+            onTrack={changeTrack}
+            onSeek={seek}
+            status={status}
+          />
           <nav className="tf-tabs" aria-label="设置分类">
             {TABS.map((item) => (
               <button

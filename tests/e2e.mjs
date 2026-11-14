@@ -75,6 +75,20 @@ try {
   assert.match(await page.locator('.tf-modal h2').textContent(), /导出视频/);
   await page.locator('.tf-modal .tf-icon-btn').click();
 
+  // The score card collapses to one row and the choice is remembered (a UI
+  // preference kept outside the project settings, so it survives a reload).
+  await page.evaluate(() => localStorage.removeItem('tabfall.ui.v1'));
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('.tf-score-card h2');
+  await page.locator('.tf-score-toggle').click();
+  await page.waitForSelector('.tf-score-card.is-collapsed');
+  const collapsedHeight = (await page.locator('.tf-score-card').boundingBox()).height;
+  assert.ok(collapsedHeight < 48, `collapsed card stays one row (${collapsedHeight}px)`);
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('.tf-score-card.is-collapsed', { timeout: 20_000 });
+  await page.locator('.tf-score-card.is-collapsed').click();
+  await page.waitForSelector('.tf-score-card h2', { timeout: 20_000 });
+
   assert.deepEqual(errors, [], `browser errors:\n${errors.join('\n')}`);
   console.log('e2e ok:', { url, canvas, clock: Math.round(state.clock), combo: state.combo });
 } finally {

@@ -30,7 +30,7 @@
 - **多轨**：预览用 `changeTrackSolo` 只播选中轨；合成导出必须给其他轨 `trackVolume: 0`，否则导出会混入所有乐器。
 - **平滑**：`smoothingTau = 0.02 + 0.34 s²`，`lookahead = tau * factor`，参数与 gp-studio 横向镜头一致；改任一个都要同步文档和测试。
 - **alphaTab 署名**：画面右下角默认 `TABFALL · alphaTab`；保留 alphaTab 的许可文件与资源的可见署名。
-- **localStorage key**：`tabfall.settings.v1`。改 key 要写迁移；背景图不落盘。
+- **localStorage key**：`tabfall.settings.v1`（项目设置）；纯界面偏好（目前是侧栏曲谱卡片的折叠状态）走 `tabfall.ui.v1`，不要混进 `ProjectSettings`——它不该触发引擎重绘或进导出流程。改 key 要写迁移；背景图不落盘。
 - **根容器不可滚动**：`.tf-app` 用 `position:fixed` + `overflow:clip`。`overflow:hidden` 仍会被浏览器在控件获得焦点时程序化滚动（`scrollTop` 变大且没有滚动条可恢复），切换设置会整页下坠。唯一允许滚动的是 `.tf-sidebar-scroll`。
 - **泛音 / 技巧连接**：泛音形状由 `resolvedNoteShape()` 覆盖为菱形（可关）；连接目标必须取 alphaTab 的 `slideTarget` / `hammerPullDestination` / `slurDestination` 模型指针，按 played-order occurrence 映射，只有目标被 tie 合并时才回退到同弦下一个音符。
 - **近距离合并形状**：`planMergedGroups()` 只在同弦、非泛音/非纯数字、中心距 <= `mergeDistance × noteH` 时合并；合并组由 `drawMergedBodies()` 画唯一形体，组内音符只画数字。远距离/跨弦/泛音仍走 `drawNoteLinks()`。不要按时间阈值硬编码，距离要用当前布局的像素。合并形体必须复用单音符的辉光逻辑（`noteGlow()` 精灵沿形体拉伸 + 随 `noteGlow`/贴近判定线的 shadowBlur），否则连成一体的音符会显得没有辉光。
