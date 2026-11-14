@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.browser/
+tests/artifacts/
+tests/frames/
+tests/*.webm
+tests/*.mp4
+tests/*.png
+!docs/*.png
+certs/

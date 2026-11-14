@@ -1,0 +1,32 @@
+{
+  "name": "tabfall",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Rhythm-game style vertical guitar tab video maker built on alphaTab.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node scripts/build.mjs && node scripts/serve.mjs",
+    "serve": "node scripts/serve.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "cert": "node scripts/make-cert.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@coderline/alphatab": "^1.9.0",
+    "mediabunny": "^1.65.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.27",
+    "@types/react-dom": "^18.3.7",
+    "esbuild": "^0.25.12",
+    "playwright": "^1.65.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  }
+}
