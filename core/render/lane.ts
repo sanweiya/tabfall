@@ -293,6 +293,37 @@ export function mapY(note: LaneNote, settings: ProjectSettings, frame: LaneFrame
   };
 }
 
+/** One cached blurred backdrop per (image, frame size, blur) — see drawBackground. */
+const backgroundBlurCache = new WeakMap<HTMLImageElement, { key: string; canvas: HTMLCanvasElement }>();
+
+function blurredBackground(
+  image: HTMLImageElement,
+  width: number,
+  height: number,
+  blur: number,
+): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null;
+  const key = `${width}x${height}@${blur.toFixed(1)}`;
+  const cached = backgroundBlurCache.get(image);
+  if (cached && cached.key === key) return cached.canvas;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+  ctx.filter = `blur(${blur.toFixed(1)}px)`;
+  ctx.drawImage(
+    image,
+    (width - image.naturalWidth * scale) / 2,
+    (height - image.naturalHeight * scale) / 2,
+    image.naturalWidth * scale,
+    image.naturalHeight * scale,
+  );
+  backgroundBlurCache.set(image, { key, canvas });
+  return canvas;
+}
+
 function drawBackground(
   ctx: CanvasRenderingContext2D,
   geometry: LaneGeometry,
@@ -315,15 +346,23 @@ function drawBackground(
 
   if (assets.backgroundImage) {
     const image = assets.backgroundImage;
-    const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
-    const w = image.naturalWidth * scale;
-    const h = image.naturalHeight * scale;
-    ctx.save();
     const blur = Math.max(0, appearance.backgroundImageBlur) * geometry.unit;
-    if (blur > 0.3) ctx.filter = `blur(${blur.toFixed(1)}px)`;
-    ctx.globalAlpha = 1;
-    ctx.drawImage(image, (width - w) / 2, (height - h) / 2, w, h);
-    ctx.restore();
+    // Blurring a full frame is by far the most expensive per-frame operation
+    // when a photo is set, and the result never changes: render it once into an
+    // offscreen canvas and blit that instead.
+    const blurred = blur > 0.3 ? blurredBackground(image, width, height, blur) : null;
+    if (blurred) {
+      ctx.drawImage(blurred, 0, 0);
+    } else {
+      const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+      const w = image.naturalWidth * scale;
+      const h = image.naturalHeight * scale;
+      ctx.save();
+      if (blur > 0.3) ctx.filter = `blur(${blur.toFixed(1)}px)`;
+      ctx.globalAlpha = 1;
+      ctx.drawImage(image, (width - w) / 2, (height - h) / 2, w, h);
+      ctx.restore();
+    }
     const dim = clamp01(appearance.backgroundImageDim);
     if (dim > 0) {
       ctx.fillStyle = rgba(appearance.backgroundTop, dim * 0.92);
@@ -1069,7 +1108,13 @@ function drawStringLegend(
   if (!appearance.showStringLabels && !appearance.showStringNumbers) return;
   const { stringXs, hitY, gap, unit, width } = geometry;
   const labels = track.info.tuning;
-  const y = Math.min(geometry.height - unit * 16, hitY + gap * 0.72);
+  // Pure-black frames fade the outer band to 0 and the legend is drawn after
+  // that fade, so it has to stay out of the band instead of sitting 16px above
+  // the bottom edge.
+  const edgeGuard = appearance.backgroundMode === 'black'
+    ? Math.max(32, Math.min(width, geometry.height) * 0.055) + unit * 6
+    : 0;
+  const y = Math.min(geometry.height - unit * 16 - edgeGuard, hitY + gap * 0.72);
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -1087,11 +1132,6 @@ function drawStringLegend(
     ctx.fillStyle = rgba(appearance.stringColor, isLight ? 0.62 : 0.55);
     ctx.fillText(text, stringXs[i], y);
   }
-  const center = (stringXs[0] + stringXs[stringXs.length - 1]) / 2;
-  ctx.fillStyle = rgba(appearance.stringColor, isLight ? 0.42 : 0.34);
-  ctx.font = `600 ${(unit * 9).toFixed(1)}px ${fontStack(appearance.noteFont, 'sans-serif')}`;
-  void center;
-  void width;
   ctx.restore();
 }
 

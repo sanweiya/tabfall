@@ -53,6 +53,16 @@ function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
+/** FNV-1a over a short string, used to seed effects from their colours. */
+function hashString(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
 function easeOutCubic(t: number): number {
   const p = 1 - clamp01(t);
   return 1 - p * p * p;
@@ -219,7 +229,6 @@ function makeParticles(kind: EffectInstance['kind'], intensity: number, rng: () 
 export class HitEffects {
   private items: EffectInstance[] = [];
   private cooldown = 0;
-  private spawnCount = 0;
 
   clear(): void {
     this.items = [];
@@ -244,8 +253,11 @@ export class HitEffects {
     if (clamped <= 0.01) return;
     // Keep chords or very fast passages from flooding the canvas.
     if (this.items.length > 160) return;
-    this.spawnCount += 1;
-    const seed = (Math.floor(x * 7919) ^ Math.floor(born * 13) ^ this.spawnCount * 2654435761) >>> 0;
+    // Deterministic per (position, birth time, colour). The preview and the
+    // exporter spawn effects in different orders and the exporter starts from
+    // frame 0, so a running counter would make the same note produce a
+    // different pattern in the video than in the preview.
+    const seed = (Math.floor(x * 7919) ^ Math.floor(born * 13) ^ hashString(`${color}|${accent}`)) >>> 0;
     const rng = mulberry32(seed);
     this.items.push({
       kind,

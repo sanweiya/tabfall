@@ -522,10 +522,21 @@ export function App(): React.ReactElement {
   const openFilePicker = React.useCallback(() => fileInputRef.current?.click(), []);
 
   const loadFile = React.useCallback((file: File) => {
-    setExportState(IDLE_EXPORT);
+    // Swapping the score mid-render would leave the exporter drawing the old
+    // one while the UI shows the new one.
+    if (exportState.status === 'running') {
+      notify('info', '正在导出，完成或取消后再换谱');
+      return;
+    }
+    setExportState((previous) => {
+      // The previous result's blob URL lives until the dialog closes; dropping a
+      // new score used to replace it without revoking, leaking the whole video.
+      if (previous.url) URL.revokeObjectURL(previous.url);
+      return IDLE_EXPORT;
+    });
     setFileName(file.name);
     engineRef.current?.loadFile(file);
-  }, []);
+  }, [exportState.status, notify]);
 
   const onFileInput = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -572,8 +583,15 @@ export function App(): React.ReactElement {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase() ?? '';
-      if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button') return;
+      // Text fields, selects and sliders own the arrow keys. Buttons do not, and
+      // clicking play/restart leaves one focused — swallowing every shortcut
+      // afterwards would make ← / → / Home silently dead right when the user
+      // wants them most.
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable) return;
       if (event.code === 'Space') {
+        // A focused button activates natively on Space; handling it here as well
+        // would toggle playback twice.
+        if (tag === 'button') return;
         event.preventDefault();
         togglePlay();
       } else if (event.code === 'Home') {

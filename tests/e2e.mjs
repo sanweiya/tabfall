@@ -53,6 +53,21 @@ try {
   assert.ok(state.combo > 0, 'hits are detected');
   assert.ok(state.effects >= 0, 'effect system is alive');
 
+  // Shortcuts must keep working while a transport button holds focus: clicking
+  // play/restart used to silence ← / → / Home for the rest of the session.
+  await page.locator('.tf-play').click();
+  const pausedClock = await page.evaluate(() => window.__tabfall.engine.debugState().clock);
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(150);
+  const seekedClock = await page.evaluate(() => window.__tabfall.engine.debugState().clock);
+  assert.ok(
+    seekedClock - pausedClock > 900 && seekedClock - pausedClock < 1200,
+    `ArrowRight with a focused button: ${Math.round(pausedClock)} -> ${Math.round(seekedClock)}`,
+  );
+  await page.keyboard.press('Home');
+  await page.waitForTimeout(150);
+  assert.ok(await page.evaluate(() => window.__tabfall.engine.debugState().clock) < 1, 'Home rewinds to 0');
+
   await page.screenshot({ path: fileURLToPath(new URL('./artifacts/e2e.png', import.meta.url)) });
 
   await page.locator('.tf-topbar-actions .is-primary').click();

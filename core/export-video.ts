@@ -176,7 +176,11 @@ function mapScoreToAudio(points: SyncMapPoint[]): (scoreMs: number) => number {
     }
     const last = points[points.length - 1];
     if (scoreMs >= last.scoreMs) {
-      return last.audioMs + (scoreMs - last.scoreMs);
+      // Continue with the slope of the last interval, not 1:1: mapAudioToScore
+      // extrapolates the tail with that slope, and a mismatch would desync the
+      // video tail from the recording whenever the audio and the tempo map run
+      // at slightly different speeds.
+      return last.audioMs + (scoreMs - last.scoreMs) * tailAudioPerScore(points);
     }
     let low = 0;
     let high = points.length - 1;
@@ -193,6 +197,16 @@ function mapScoreToAudio(points: SyncMapPoint[]): (scoreMs: number) => number {
   };
 }
 
+/** Slope (audio ms per score ms) of the last sync-point interval. */
+function tailAudioPerScore(points: SyncMapPoint[]): number {
+  if (points.length < 2) return 1;
+  const last = points[points.length - 1];
+  const previous = points[points.length - 2];
+  const scoreSpan = last.scoreMs - previous.scoreMs;
+  const audioSpan = last.audioMs - previous.audioMs;
+  return scoreSpan > 0 && audioSpan > 0 ? audioSpan / scoreSpan : 1;
+}
+
 /** Inverse of {@link mapScoreToAudio}: audio position -> played-order score time. */
 function mapAudioToScore(points: SyncMapPoint[]): (audioMs: number) => number {
   if (points.length === 0) return (audioMs) => audioMs;
@@ -201,10 +215,7 @@ function mapAudioToScore(points: SyncMapPoint[]): (audioMs: number) => number {
     return (audioMs) => audioMs - offset;
   }
   const last = points[points.length - 1];
-  const previous = points[points.length - 2];
-  const tailSpan = last.scoreMs - previous.scoreMs;
-  const tailAudio = last.audioMs - previous.audioMs;
-  const tailSlope = tailAudio > 0 ? tailSpan / tailAudio : 1;
+  const tailSlope = 1 / tailAudioPerScore(points);
   return (audioMs: number) => {
     if (audioMs <= points[0].audioMs) return points[0].scoreMs + (audioMs - points[0].audioMs);
     if (audioMs >= last.audioMs) return last.scoreMs + (audioMs - last.audioMs) * tailSlope;
@@ -589,11 +600,13 @@ export async function exportVideo(
     canvas.height = height;
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('无法创建画布');
+    // Declared before the encoder: its output callback closes over this list and
+    // must not touch it in the temporal dead zone if the encoder fails early.
+    const pending: Promise<void>[] = [];
     const encoder = new VideoEncoder({
       output: (chunk, meta) => { pending.push(videoSource.add(EncodedPacket.fromEncodedChunk(chunk), meta)); },
       error: (reason) => { encodeError = reason; },
     });
-    const pending: Promise<void>[] = [];
     encoder.configure({
       codec: videoCodec.encoderCodec,
       width,
@@ -623,7 +636,11 @@ export async function exportVideo(
         // timeline so the first notes are already falling above the hit line
         // when the audio starts. Clamping to score 0 during the lead-in would
         // freeze every note at its start position for the whole countdown.
-        const laneTime = clockMs < 0 ? clockMs : scoreTime;
+        // Past the end of the score the preview keeps the clock running through
+        // the outro (tickAtTimeUnclamped extrapolates), while scoreAtClock is
+        // clamped for hit detection; add that overrun back for the drawing clock.
+        const overrunMs = Math.max(0, clockMs - (leadInMs + soundtrack.timing.audioSpanMs));
+        const laneTime = clockMs < 0 ? clockMs : scoreTime + overrunMs;
         const anchor = timeMode ? laneTime : tickAtTimeUnclamped(loaded.timeline, laneTime);
         const targetPosition = timeMode ? laneTime + lookaheadMs : tickAtTimeUnclamped(loaded.timeline, laneTime + lookaheadMs);
         const dt = 1 / fps;

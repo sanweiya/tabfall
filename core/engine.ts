@@ -102,6 +102,7 @@ export class LaneEngine {
   private combo = 0;
   private backgroundToken = 0;
   private raf = 0;
+  private lastFrameError = 0;
   private volume = 1;
   private lastFrame: LaneFrame | null = null;
   private needsDraw = true;
@@ -420,6 +421,10 @@ export class LaneEngine {
       this.preRollFrom = this.clockMs;
       this.preRollWall = performance.now();
       this.audioStarted = false;
+      // Start the countdown from the extrapolated position, not from tick 0:
+      // otherwise the first frames draw every note sitting on the hit line and
+      // the column visibly slides up into place (the exporter has no such jump).
+      this.smoother.reset(this.anchorFor(this.clockMs));
       try { this.api.pause(); } catch { /* ignore */ }
     } else if (this.clockMs <= 0.5 && this.leadInMs() > 0) {
       this.preRoll = true;
@@ -428,6 +433,7 @@ export class LaneEngine {
       this.clockMs = this.preRollFrom;
       this.audioStarted = false;
       this.resetHitState(this.clockMs);
+      this.smoother.reset(this.anchorFor(this.clockMs));
       try { this.api.pause(); } catch { /* ignore */ }
     } else {
       this.startAudioAt(this.clockMs, performance.now());
@@ -474,6 +480,7 @@ export class LaneEngine {
         this.clockMs = this.preRollFrom;
         this.audioStarted = false;
         this.resetHitState(this.clockMs);
+        this.smoother.reset(this.anchorFor(this.clockMs));
         try { this.api.pause(); } catch { /* ignore */ }
       } else {
         this.startAudioAt(target, performance.now());
@@ -567,6 +574,10 @@ export class LaneEngine {
       this.preRoll = false;
       this.audioStarted = false;
       this.holdActive = false;
+      // The clock freezes here, so anything still animating would be drawn at a
+      // constant age forever: `loop` keeps drawing while effects exist, but
+      // `updateHits` (the only ageing pump) stops with playback.
+      this.effects.clear();
       try { this.api.pause(); } catch { /* ignore */ }
       this.needsDraw = true;
       this.callbacks.onPlaying?.(false);
@@ -687,12 +698,28 @@ export class LaneEngine {
     if (this.destroyed) return;
     const dt = clamp((now - this.lastWall) / 1000, 0, 0.1);
     this.lastWall = now;
-    if (this.playing) this.advance(dt, now);
-    if (this.playing && this.track) this.updateHits(now);
-    if (this.playing || this.effects.size > 0 || this.needsDraw) this.draw(dt);
-    this.emitTime();
-    this.raf = requestAnimationFrame(this.loop);
+    try {
+      if (this.playing) this.advance(dt, now);
+      if (this.playing && this.track) this.updateHits(now);
+      if (this.playing || this.effects.size > 0 || this.needsDraw) this.draw(dt);
+      this.emitTime();
+    } catch (error) {
+      // Without this, one bad frame (a malformed setting from localStorage, a
+      // tainted canvas) kills the animation loop permanently and silently.
+      this.playing = false;
+      this.reportFrameError(error);
+    } finally {
+      if (!this.destroyed) this.raf = requestAnimationFrame(this.loop);
+    }
   };
+
+  private reportFrameError(error: unknown): void {
+    const now = performance.now();
+    if (now - this.lastFrameError < 1000) return;
+    this.lastFrameError = now;
+    const message = error instanceof Error ? error.message : String(error);
+    this.callbacks.onError?.(`渲染出错：${message}`);
+  }
 
   /** Snapshot used by the automated visual tests (and handy in the console). */
   debugState(): any {
