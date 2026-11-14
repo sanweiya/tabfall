@@ -2,12 +2,6 @@
 
 把 Guitar Pro / MusicXML 曲谱变成**下落式音游六线谱视频**：只保留竖排的六根弦线和数字，音符从上往下落到一条静止的判定线，击中有 Phigros 风格星芒或烟雾散开，最后离线导出带音轨的 MP4 / WebM。
 
-![工作台](docs/preview.png)
-
-![竖屏与烟雾效果](docs/portrait.png)
-
-![泛音菱形与击勾弦 / 滑音连接](docs/connections.png)
-
 ## 它是什么
 
 - **解析**：alphaTab 1.9 负责读取 `.gp3/.gp4/.gp5/.gpx/.gp/.gp7/.gp8/.musicxml/.mxl`，也支持 `.alphatex`。
