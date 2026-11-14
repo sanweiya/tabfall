@@ -205,7 +205,9 @@ vendor/               alphaTab worker/core、Bravura、Sonivox
 scripts/              esbuild 构建、零依赖静态服务器
 samples/              原创 GP7 测试夹具
 tests/                单元测试与可选浏览器测试
+AGENTS.md             维护说明（入口，只有红线与索引）
 docs/                 截图
+docs/agents/          环境 / 不变式 / 工作流 / 已知问题分册
 ```
 
 ## 开发与测试
