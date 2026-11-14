@@ -2,6 +2,8 @@
 
 把 Guitar Pro / MusicXML 曲谱变成**下落式音游六线谱视频**：只保留竖排的六根弦线和数字，音符从上往下落到一条静止的判定线，击中有 Phigros 风格星芒或烟雾散开，最后离线导出带音轨的 MP4 / WebM。
 
+**在线试用**：<https://sanweiya.github.io/tabfall/>（GitHub Pages，每次推送到 `main` 自动重新部署；导出功能需要支持 WebCodecs 的 Chrome / Edge）
+
 ## 它是什么
 
 - **解析**：alphaTab 1.9 负责读取 `.gp3/.gp4/.gp5/.gpx/.gp/.gp7/.gp8/.musicxml/.mxl`，也支持 `.alphatex`。
@@ -53,6 +55,18 @@ npm test
 **必须通过 http 访问**，不要双击 `dist/index.html`：alphaTab 需要 fetch worker、字体和音色库，`file://` 会被浏览器拦截。
 
 打开页面会自动载入一段内置原创示例 `Neon Run`（AlphaTex）。点击「打开曲谱」或把 GP 文件拖进窗口即可替换。
+
+## 部署
+
+线上版本由 GitHub Actions 构建并发布到 GitHub Pages：
+
+- **地址**：<https://sanweiya.github.io/tabfall/>
+- **触发**：推送到 `main`，或在 Actions 页面手动 `Run workflow`（`gh workflow run "Deploy to GitHub Pages"`）。
+- **流程**：`npm ci` → `npm run typecheck` → `npm test` → `npm run build` → 把 `dist/` 作为 Pages 产物上传并部署。
+- **前提**：仓库 Settings → Pages → Source 选择 **GitHub Actions**（本仓库已配置，等价于 `gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow`）。
+- **子路径**：这是项目站点，位于 `/tabfall/` 下。`index.html` 只用 `./app.js` / `./app.css` 这类相对路径，应用本身用 `document.baseURI` 推导 `assets/` 前缀，所以构建时不需要额外的 basePath 参数。
+
+因为 Pages 是 HTTPS 来源，线上版本的 WebCodecs 导出可直接使用（本地用 `file://` 打开则不行）。
 
 ## 使用
 
