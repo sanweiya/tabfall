@@ -2,7 +2,7 @@
 
 把 Guitar Pro / MusicXML 曲谱变成**下落式音游六线谱视频**：只保留竖排的六根弦线和数字，音符从上往下落到一条静止的判定线，击中有 Phigros 风格星芒或烟雾散开，最后离线导出带音轨的 MP4 / WebM。
 
-**在线试用**：<https://sanweiya.github.io/tabfall/>（GitHub Pages，每次推送到 `main` 自动重新部署；导出功能需要支持 WebCodecs 的 Chrome / Edge）
+**在线试用**：<https://sanweiya.github.io/tabfall/>（GitHub Pages，每次推送到 `main` 自动重新部署；导出功能需要支持 WebCodecs 的 Chrome / Edge / Firefox）
 
 ## 它是什么
 
@@ -27,18 +27,20 @@
 
 ## 快速开始
 
-要求 Node.js ≥ 18；导出需要支持 WebCodecs 的 Chrome / Edge。
+要求 Node.js ≥ 18；导出需要支持 WebCodecs 的浏览器（Chrome / Edge，或 Firefox 130+；本机用 Firefox 160 实测通过）。
 
 ```bash
 npm install
-npm start           # 构建并启动 http://127.0.0.1:4173/
+npm start           # 构建并启动 http://127.0.0.1:4175/
 ```
+
+端口默认是 **4175（HTTP）/ 4176（HTTPS）**。本机 4173 已被另一个项目占用，所以这里刻意避开；需要换端口时用 `PORT=4178 npm start`（HTTPS 用 `TLS_PORT`）。
 
 局域网远程访问并需要导出视频时，用 HTTPS：
 
 ```bash
-npm run cert        # 生成自签名证书（自动包含本机 LAN IPv4）
-npm start           # 同时开启 http://<LAN-IP>:4173 和 https://<LAN-IP>:4174
+npm run cert        # 生成自签名证书（自动包含本机 LAN IPv4；本机已生成，可跳过）
+npm start           # 同时开启 http://<LAN-IP>:4175 和 https://<LAN-IP>:4176
 ```
 
 浏览器第一次打开 HTTPS 会提示证书不受信任，点“高级 → 继续访问”即可；之后该来源被视为安全上下文，WebCodecs 视频导出可用。IP 变化后重新运行 `npm run cert` 并重启。
@@ -47,7 +49,7 @@ npm start           # 同时开启 http://<LAN-IP>:4173 和 https://<LAN-IP>:417
 
 ```bash
 npm run build       # 只构建到 dist/
-npm run serve       # 只启动静态服务（默认同时尝试 4174 HTTPS，证书缺失时自动跳过）
+npm run serve       # 只启动静态服务（默认同时尝试 4176 HTTPS，证书缺失时自动跳过）
 npm run typecheck
 npm test
 ```
@@ -172,7 +174,7 @@ visual   += (target - visual) * (1 - exp(-dt / tau))
 | MP4 | H.264（avc1） | AAC；浏览器没有 AAC 编码器时回退 Opus，并在成功页提示 |
 | WebM | VP9（回退 VP8） | Opus |
 
-> Chromium 在部分 Linux 发行版上不提供 AAC 编码器，这是浏览器能力问题，不是文件问题；MP4 + Opus 在 Chrome / VLC 可正常播放。
+> 没有 AAC 编码器的不只是部分 Linux Chromium：Firefox 也没有（本机 Firefox 160 实测：opus 可用、`mp4a.40.2` 不可用）。这是浏览器能力问题，不是文件问题；MP4 + Opus 在 Chrome / VLC 可正常播放，成功页会给出提示。
 
 ## 自定义一览
 
@@ -204,7 +206,7 @@ core/
 vendor/               alphaTab worker/core、Bravura、Sonivox
 scripts/              esbuild 构建、零依赖静态服务器
 samples/              原创 GP7 测试夹具
-tests/                单元测试与可选浏览器测试
+tests/                单元测试与浏览器冒烟（firefox-e2e.mjs / e2e.mjs）
 AGENTS.md             维护说明（入口，只有红线与索引）
 docs/                 截图
 docs/agents/          环境 / 不变式 / 工作流 / 已知问题分册
@@ -220,22 +222,21 @@ npm run build
 
 单元测试使用 `samples/tabfall-*.gp`，它们是由 `tests/make-fixtures.ts` 从内置 AlphaTex 导出的原创 GP7，不含第三方歌曲。
 
-可选的浏览器端到端测试（Playwright，需要本机有 Chromium / Chrome）：
+浏览器冒烟测试默认走**本机 Firefox + geckodriver**（本机没有 Chromium 系浏览器）：
 
 ```bash
-# 先用 npm start 或 npm run serve 起服务
-CHROMIUM_PATH=/path/to/chrome TABFALL_URL=http://127.0.0.1:4173/ node tests/e2e.mjs
+npm run build
+npm run serve                # 终端 1，默认 http://127.0.0.1:4175/
+npm run test:firefox         # 终端 2；需要时由脚本自动拉起 geckodriver
 ```
 
-需要人工看画面/截图时，用**本机 Firefox + geckodriver**（不要用 Playwright 自带的浏览器构建）：
+会检查：页面载入、画布尺寸与非空绘制、播放后时钟与连击、暂停时的 `→` / `Home` 快捷键、运行期无 JS 报错，并截图到 `tests/artifacts/firefox.png`（整页）与 `tests/artifacts/firefox-canvas.png`（谱面画布）。它用 W3C WebDriver 直接驱动系统 Firefox（`/opt/firefox/firefox`），不依赖 Playwright，也不下载任何浏览器。可调环境变量（`FIREFOX_BIN`、`GECKODRIVER`、`GECKODRIVER_PORT`、`TABFALL_URL`、`HEADLESS=0`）与手动会话用法见 [docs/agents/workflow.md](docs/agents/workflow.md)。
+
+若机器上有 Chromium / Chrome，仍可用 Playwright 版本：
 
 ```bash
-sudo apt install firefox-geckodriver   # 版本跟随系统 Firefox
-geckodriver --host 127.0.0.1 --port 4444
-# 然后用 W3C WebDriver 驱动 firefox --headless，截图 .tf-stage canvas
+CHROMIUM_PATH=/path/to/chrome TABFALL_URL=http://127.0.0.1:4175/ node tests/e2e.mjs
 ```
-
-会检查：页面载入、画布尺寸、播放后时钟与连击、无控制台错误，并截图到 `tests/artifacts/e2e.png`。
 
 如果需要重新生成 GP 夹具：
 
@@ -259,6 +260,6 @@ npx tsx tests/make-fixtures.ts
 - [Bravura](https://github.com/steinbergmedia/bravura) SMuFL 字体 — SIL Open Font License 1.1。`vendor/font/`。
 - [Sonivox](https://github.com/pschatzmann/sonivox) SoundFont — 见 `vendor/soundfont/LICENSE`。
 - [mediabunny](https://mediabunny.dev/) — MPL-2.0（MP4/WebM 封装）。
-- 平滑参数与“只滤波画面、不滤波音频”的设计参考了本地项目 `gp-studio`（Duck Score Motion）的横向镜头实现；本工具的竖排投影、音游渲染和导出管线为独立实现。
+- 平滑参数与“只滤波画面、不滤波音频”的设计参考了本机另一个项目 `dynamic-guitar-tab`（Duck Score Motion）的横向镜头实现；本工具的竖排投影、音游渲染和导出管线为独立实现。
 
 alphaTab 是 alphaTab 项目的名称；本工具与 alphaTab 官方无隶属关系。

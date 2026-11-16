@@ -8,9 +8,12 @@ import { fileURLToPath } from 'node:url';
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = path.join(appDir, 'dist');
-const port = Number(process.env.PORT ?? process.argv[2] ?? 4173);
+// 4173 is taken by the sibling dynamic-guitar-tab project on this machine, so
+// TABFALL deliberately uses 4175 (HTTP) / 4176 (HTTPS). Override with PORT /
+// TLS_PORT if those are ever taken too.
+const port = Number(process.env.PORT ?? process.argv[2] ?? 4175);
 const host = process.env.HOST ?? '0.0.0.0';
-const tlsPort = Number(process.env.TLS_PORT ?? 4174);
+const tlsPort = Number(process.env.TLS_PORT ?? 4176);
 const types = new Map([
   ['.html', 'text/html; charset=utf-8'], ['.js', 'text/javascript; charset=utf-8'],
   ['.mjs', 'text/javascript; charset=utf-8'], ['.css', 'text/css; charset=utf-8'],

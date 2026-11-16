@@ -10,6 +10,8 @@
     "serve": "node scripts/serve.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test tests/*.test.ts",
+    "test:firefox": "node tests/firefox-e2e.mjs",
+    "test:chromium": "node tests/e2e.mjs",
     "cert": "node scripts/make-cert.mjs"
   },
   "engines": {

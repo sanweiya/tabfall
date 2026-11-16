@@ -14,7 +14,7 @@
 
 - **音频时钟是唯一真相**。`api.timePosition`（经本地预测）驱动判定；`ScrollSmoother` 只影响画面绘制位置。不要把平滑后的位置用于命中判定。
 - **默认 `spacing: 'beat'` 是 tick 线性**：4 分音符 = 4 个 16 分音符。不要改回 alphaTab 的制谱间距；那会破坏需求 6。
-- **平滑**：`smoothingTau = 0.02 + 0.34 s²`，`lookahead = tau * factor`，参数与 gp-studio 横向镜头一致；改任一个都要同步文档和测试（`tests/smoothing.test.ts` 锁住了曲线）。
+- **平滑**：`smoothingTau = 0.02 + 0.34 s²`，`lookahead = tau * factor`，参数与本机 `dynamic-guitar-tab`（Duck Score Motion）横向镜头一致；改任一个都要同步文档和测试（`tests/smoothing.test.ts` 锁住了曲线）。
 - **导出片头**：预告阶段（`clock < 0`）的画面必须用**负时间外推谱面**（`tickAtTimeUnclamped(laneTime)`），和预览 `currentFrame()` 一致；不要把 scoreTime 夹到 0，否则整段倒数的音符会停在开局位置，音乐一响才突然开始下落。
 - **导出音频时间轴**：内置伴奏是真实录音，只能按同步点算出区间后**原生速率整体截取**，视频时间轴用反函数 `scoreAtClock()` 从音频位置求谱面时间；不要重采样把伴奏拉伸到谱面 tempo（每个同步点区间的比率不同，会持续变调）。`mapScoreToAudio` / `mapAudioToScore` 的片尾外推斜率必须一致。
 

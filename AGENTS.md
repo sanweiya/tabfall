@@ -8,7 +8,7 @@ TypeScript + React + alphaTab 1.9 + WebCodecs（Mediabunny 封装），构建用
 | 文档 | 里面有什么 |
 |---|---|
 | [invariants.md](docs/agents/invariants.md) | 全部不变式（渲染 / 时间与音频 / 多轨 / 透视 / 存储），改代码前读对应条目 |
-| [environment.md](docs/agents/environment.md) | 本机环境：Node、Edge/Firefox、ffmpeg、端口坑、参考项目 |
+| [environment.md](docs/agents/environment.md) | 本机环境：Node、Firefox/geckodriver（含自行更新授权）、端口坑（4173 被占）、Windows 拷贝遗留、参考项目 |
 | [workflow.md](docs/agents/workflow.md) | 命令、浏览器验证配方、改动后自查、部署 |
 | [known-issues.md](docs/agents/known-issues.md) | 已知限制与还没修的坑 |
 
@@ -27,13 +27,14 @@ TypeScript + React + alphaTab 1.9 + WebCodecs（Mediabunny 封装），构建用
 
 ## 命令
 
-```powershell
-npm install
-npm start            # build + serve → http://127.0.0.1:4173/
+```bash
+npm ci
+npm start            # build + serve → http://127.0.0.1:4175/
 npm run typecheck && npm test && npm run build
+npm run test:firefox # geckodriver + 本机 Firefox 冒烟（需先起服务）
 ```
 
-`npm test` 当前 18 项、约 0.5 s。浏览器冒烟、截图与导出自查见 [workflow.md](docs/agents/workflow.md)。
+`npm test` 当前 18 项、约 0.6 s。浏览器冒烟、截图与导出自查见 [workflow.md](docs/agents/workflow.md)；本机没有 Chromium，浏览器验证走 Firefox。
 
 ## 提交前
 

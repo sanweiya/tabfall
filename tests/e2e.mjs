@@ -1,8 +1,14 @@
 /**
- * Optional browser smoke test.
+ * Optional Chromium smoke test. On this machine there is no Chromium-family
+ * browser installed, so the Firefox channel below is the default one:
  *
- *   npm start                     (or: npm run build && npm run serve)
- *   CHROMIUM_PATH=/path/to/chrome TABFALL_URL=http://127.0.0.1:4173/ node tests/e2e.mjs
+ *   npm run serve                        (port 4175, build first)
+ *   node tests/firefox-e2e.mjs           # geckodriver + local Firefox
+ *
+ * This Chromium variant needs a Chromium/Chrome binary (Playwright's bundled
+ * one is not installed either):
+ *
+ *   CHROMIUM_PATH=/path/to/chrome TABFALL_URL=http://127.0.0.1:4175/ node tests/e2e.mjs
  *
  * It loads the built-in demo, plays past the pre-roll and verifies that the
  * audio clock advances, hits register and the canvas is actually rendered.
@@ -12,7 +18,7 @@ import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
-const url = process.env.TABFALL_URL || 'http://127.0.0.1:4173/';
+const url = process.env.TABFALL_URL || 'http://127.0.0.1:4175/';
 const executablePath = process.env.CHROMIUM_PATH || undefined;
 const errors = [];
 
