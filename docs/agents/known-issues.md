@@ -2,7 +2,7 @@
 
 2026-11-15 的一次代码审查里确认过、但当时没修的问题（2026-11-16 在 Linux + Firefox 上补了实测）。修之前先看这里，别重复踩。
 
-- **每帧全量扫描**：`drawLaneScene` 从第 0 个音符扫到可视窗口，`planMergedGroups` / `drawNoteLinks` 每帧为整条轨建 Map/Set。几千音符的谱面会线性变慢（导出时逐帧如此）。改法是二分可视起点、按 `(track, layout, appearance)` 缓存 merge 计划——两条路径共用 `drawLaneFrame`，改一次即可。
+（“每帧全量扫描”一条已于 2026-11-20 修复：可见扫描改二分窗口、merge 计划按输入缓存、链接窗口化、合并组端点裁切；修复经过新旧构建逐像素哈希对比验证，基准见 workflow.md 的「渲染性能基准」。）
 - **透视时弦名图例不随条带变形**：`drawStringLegend` 在 `drawPerspective` 之后平面绘制（只补了纯黑模式的边缘安全距离）。要贴合变形后的弦线，得把它移进 `drawLaneScene`。
 - **离线合成没有超时**：`synthesizeScoreAudio` 的 `await api.exportAudio(...)` 若 worker 起不来（`alphaTab.worker.js` 404 / CSP 拦截）会永不返回，UI 卡在「正在渲染音轨」，取消按钮只在拿到 exporter 之后的渲染循环里生效。
 - **音色库缺失不会告警**：`soundfont` fetch 失败时 alphaTab 仍会返回静音数据块，于是导出「有音轨但无声」且 `warning` 为空。修法是把 fetch 失败标志透传到 warning。

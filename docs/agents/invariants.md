@@ -5,6 +5,7 @@
 ## 渲染
 
 - **预览与导出共用 `core/render/lane.ts` 的 `drawLaneFrame`**。视觉改动必须同时影响两条路径；导出只允许分辨率/帧率不同。
+- **每帧扫描是窗口化的，窗口边界有语义，别改回线性全扫**：可见音符用二分定位起点，下界必须减去全曲最长音符尾巴（`scanBounds().noteSpan*`，尾巴能比头晚一个全长）；链接窗口下界要覆盖“源已命中、目标还在判定线上方长出”的链接（取 `min(可视下界, clock - linkSpan)`），上界是判定线上方 8 noteH（再高整条链接连同目标都出了画布，目标恒在源上方）。**`planMergedGroups` 返回缓存共享对象**：按 notes 数组 + spacing/appearance/geometry 缩放做键，任何新读入的设置字段都必须进 `mergedPlanKey`，且调用方不得改写返回值。合并组组内按 tick 排序是**端点裁切的前提**（首音符=组最低点、末音符=组最高点），乱了排序裁切就会漏画。
 - **数字保持正向**，谱线竖排；不画小节线、符杆、休止符。
 - **泛音 / 技巧连接**：泛音形状由 `resolvedNoteShape()` 覆盖为菱形（可关）；连接目标必须取 alphaTab 的 `slideTarget` / `hammerPullDestination` / `slurDestination` 模型指针，按 played-order occurrence 映射，只有目标被 tie 合并时才回退到同弦下一个音符。
 - **近距离合并形状**：`planMergedGroups()` 只在同弦、非泛音/非纯数字、中心距 <= `mergeDistance × noteH` 时合并；合并组由 `drawMergedBodies()` 画唯一形体，组内音符只画数字。远距离/跨弦/泛音仍走 `drawNoteLinks()`。不要按时间阈值硬编码，距离要用当前布局的像素。合并形体必须复用单音符的辉光逻辑（`noteGlow()` 精灵沿形体拉伸 + 随 `noteGlow`/贴近判定线的 shadowBlur），否则连成一体的音符会显得没有辉光。

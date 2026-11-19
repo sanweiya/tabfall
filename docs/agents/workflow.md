@@ -109,6 +109,19 @@ ffprobe -v error -show_entries stream=codec_type,codec_name,width,height:format=
 ffmpeg -hide_banner -i tests/out.webm -af volumedetect -f null -   # mean_volume 不应是 -inf
 ```
 
+## 渲染性能基准
+
+`npx tsx tests/bench-lane.ts`（不进 `npm test`）用合成大谱量化每帧扫描成本。2026-11-20 修复“每帧全量扫描”后的实测（6000 音符、1920×1080）：
+
+| 每帧成本 | 修复前 | 修复后 |
+|---|---|---|
+| merge 计划（union-find 全曲重建） | ~4.95 ms | ~0.0007 ms（缓存命中，≈6700×） |
+| 可见音符扫描 | ~3016 个/帧 | ~38 个/帧（二分窗口） |
+| 链接遍历 | 6000 个/帧 | ~44 个/帧（窗口化） |
+| 合并组映射 | 全组音符/帧 | 每组 2 个端点 + 可见组 |
+
+改渲染算法时的**逐像素 A/B**（证明行为不变的最强手段）：`window.__tabfall.engine.seek(t)` 会清特效、重置平滑器并立即绘制定帧。流程：`git stash push -- core/render/lane.ts` → `npm run build` → 起 4175 服务 → 用 WebDriver 会话 `seek(12000)`/`seek(2500)` 各等 300 ms，`getImageData` 全画布在页面内算 FNV-1a 哈希 → `git stash pop` → 重建 → 同法再算 → 两个位置的哈希都必须一致（2026-11-20 修复时实测 `d17f5ef2` / `96dfcd90`，新旧完全相同）。
+
 ## Chromium 通道（本机不可用）
 
 `tests/e2e.mjs` 是 Playwright 版本，需要本机有 Chromium / Chrome：

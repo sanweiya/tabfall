@@ -99,6 +99,57 @@ function clamp01(value: number): number {
   return clamp(value, 0, 1);
 }
 
+/** Memoized per-track scan bounds: the longest note tail and the longest link. */
+interface ScanBounds {
+  noteSpanTicks: number;
+  noteSpanMs: number;
+  linkSpanTicks: number;
+  linkSpanMs: number;
+}
+
+const scanBoundsCache = new WeakMap<LaneNote[], ScanBounds>();
+
+function scanBounds(notes: LaneNote[]): ScanBounds {
+  const cached = scanBoundsCache.get(notes);
+  if (cached) return cached;
+  let noteSpanTicks = 0;
+  let noteSpanMs = 0;
+  let linkSpanTicks = 0;
+  let linkSpanMs = 0;
+  for (const note of notes) {
+    if (note.endTick - note.tick > noteSpanTicks) noteSpanTicks = note.endTick - note.tick;
+    if (note.endTimeMs - note.timeMs > noteSpanMs) noteSpanMs = note.endTimeMs - note.timeMs;
+    const link = note.link;
+    if (link) {
+      const spanTicks = Math.max(0, link.targetTick - note.tick);
+      const spanMs = Math.max(0, link.targetTimeMs - note.timeMs);
+      if (spanTicks > linkSpanTicks) linkSpanTicks = spanTicks;
+      if (spanMs > linkSpanMs) linkSpanMs = spanMs;
+    }
+  }
+  const value = { noteSpanTicks, noteSpanMs, linkSpanTicks, linkSpanMs };
+  scanBoundsCache.set(notes, value);
+  return value;
+}
+
+/**
+ * Binary search over the played-order notes. They are sorted by tick and
+ * `timeAtTick` is monotone, so the same search works on ticks (beat spacing)
+ * and on milliseconds (time spacing). `upper` picks the first index after the
+ * last matching note, which bounds a window from both sides.
+ */
+function searchNotes(notes: LaneNote[], key: 'tick' | 'timeMs', value: number, upper: boolean): number {
+  let low = 0;
+  let high = notes.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    const item = notes[mid][key];
+    if (upper ? item <= value : item < value) low = mid + 1;
+    else high = mid;
+  }
+  return low;
+}
+
 export function computeGeometry(
   width: number,
   height: number,
@@ -574,11 +625,40 @@ export interface MergedPlan {
   mergedSourceIds: Set<number>;
 }
 
+/** One merge plan per notes array, rebuilt only when an input changes. */
+const mergedPlanCache = new WeakMap<LaneNote[], { key: string; plan: MergedPlan }>();
+
+function mergedPlanKey(
+  settings: ProjectSettings,
+  appearance: AppearanceSettings,
+  geometry: LaneGeometry,
+): string {
+  // Every input the plan reads: spacing picks the distance metric, the
+  // appearance flags decide eligibility, and the geometry scales set both the
+  // merge limit and the measured distance.
+  return [
+    settings.layout.spacing,
+    appearance.mergeNearShapes ? 1 : 0,
+    appearance.mergeDistance,
+    appearance.connectLegato ? 1 : 0,
+    appearance.connectSlide ? 1 : 0,
+    appearance.noteShape,
+    appearance.harmonicDiamond ? 1 : 0,
+    geometry.noteH.toFixed(3),
+    geometry.pxPerTick.toFixed(4),
+    geometry.pxPerMs.toFixed(4),
+  ].join('|');
+}
+
 /**
  * Decide which connected notes are close enough to become one continuous
  * shape. Only same-string, non-harmonic/non-text links can merge; everything
  * else keeps a connector line. The distance is measured in the current layout
  * (note heights), so it stays proportional on every resolution.
+ *
+ * The plan is frame-independent, so it is cached per notes array; the
+ * union-find pass over the whole track no longer runs on every frame (it used
+ * to be the biggest per-frame cost on long scores during export).
  */
 export function planMergedGroups(
   notes: LaneNote[],
@@ -586,8 +666,24 @@ export function planMergedGroups(
   appearance: AppearanceSettings,
   geometry: LaneGeometry,
 ): MergedPlan {
+  if (!appearance.mergeNearShapes) {
+    return { groups: [], mergedIds: new Set(), mergedSourceIds: new Set() };
+  }
+  const key = mergedPlanKey(settings, appearance, geometry);
+  const cached = mergedPlanCache.get(notes);
+  if (cached && cached.key === key) return cached.plan;
+  const plan = buildMergedPlan(notes, settings, appearance, geometry);
+  mergedPlanCache.set(notes, { key, plan });
+  return plan;
+}
+
+function buildMergedPlan(
+  notes: LaneNote[],
+  settings: ProjectSettings,
+  appearance: AppearanceSettings,
+  geometry: LaneGeometry,
+): MergedPlan {
   const empty: MergedPlan = { groups: [], mergedIds: new Set(), mergedSourceIds: new Set() };
-  if (!appearance.mergeNearShapes) return empty;
   const withLinks = notes.filter((note) => note.link);
   if (withLinks.length === 0) return empty;
 
@@ -662,19 +758,21 @@ function drawMergedBodies(
 ): void {
   if (groups.length === 0) return;
   for (const group of groups) {
+    // Group notes are sorted by tick, and a larger tick always sits higher on
+    // screen, so the first note is the lowest body point and the last the
+    // highest: cull on those two endpoints instead of mapping every member
+    // note (this runs for every group on every frame).
+    const first = group.notes[0];
+    const last = group.notes[group.notes.length - 1];
+    const bottomCenter = mapY(first, settings, frame, geometry).headY;
+    const topCenter = mapY(last, settings, frame, geometry).headY;
+    if (bottomCenter < -geometry.noteH * 3) continue;
+    if (topCenter > geometry.hitY + geometry.noteH * 2) continue;
     const positioned = group.notes.map((note) => ({
       note,
       headY: mapY(note, settings, frame, geometry).headY,
       hit: frame.clockMs > note.timeMs + 0.01,
     }));
-    const centers = positioned.map((entry) => entry.headY);
-    const topCenter = Math.min(...centers);
-    const bottomCenter = Math.max(...centers);
-    if (bottomCenter < -geometry.noteH * 3) continue;
-    if (topCenter > geometry.hitY + geometry.noteH * 2) continue;
-
-    const first = positioned[0]?.note ?? group.notes[0];
-    const last = positioned[positioned.length - 1]?.note ?? group.notes[group.notes.length - 1];
     const shape = resolvedNoteShape(first, appearance);
     const font = `900 ${geometry.fontSize.toFixed(1)}px ${fontStack(appearance.noteFont, 'sans-serif')}`;
     ctx.save();
@@ -745,11 +843,14 @@ function drawNoteLinks(
   settings: ProjectSettings,
   frame: LaneFrame,
   notes: LaneNote[],
+  from: number,
+  to: number,
   mergedSourceIds: Set<number>,
 ): void {
   const timeMode = settings.layout.spacing === 'time';
   const style = appearance.connectionStyle;
-  for (const note of notes) {
+  for (let index = from; index < to; index += 1) {
+    const note = notes[index];
     const link = note.link;
     if (!link) continue;
     if (mergedSourceIds.has(note.id)) continue;
@@ -1444,7 +1545,17 @@ function drawLaneScene(
   const aheadMargin = timeMode
     ? (geometry.hitY + geometry.noteH * 3) / Math.max(0.0001, geometry.pxPerMs)
     : (geometry.hitY + geometry.noteH * 3) / Math.max(0.0001, geometry.pxPerTick);
-  for (const note of track.notes) {
+  // Binary-search the first note that can still intersect the window instead
+  // of skipping every past note from index 0: on a few-thousand-note score the
+  // linear skip dominated every single frame. A tail can only reach
+  // `noteSpan` past its head, which makes the bound exact.
+  const notes = track.notes;
+  const bounds = scanBounds(notes);
+  const firstIndex = timeMode
+    ? searchNotes(notes, 'timeMs', frame.visualMs - pastMargin - bounds.noteSpanMs, false)
+    : searchNotes(notes, 'tick', frame.visualTick - pastMargin - bounds.noteSpanTicks, false);
+  for (let index = firstIndex; index < notes.length; index += 1) {
+    const note = notes[index];
     if (timeMode) {
       if (note.endTimeMs < frame.visualMs - pastMargin) continue;
       if (note.timeMs > frame.visualMs + aheadMargin) break;
@@ -1460,7 +1571,7 @@ function drawLaneScene(
     visible.push({ note, x, headY, endY, hit });
   }
 
-  const merged = planMergedGroups(track.notes, settings, appearance, geometry);
+  const merged = planMergedGroups(notes, settings, appearance, geometry);
   // The judgement line acts as a mask: a note keeps the part that is still
   // above the line until its top has crossed too. The hit effect still fires at
   // the centre crossing, but the shape is clipped, not popped out.
@@ -1470,7 +1581,27 @@ function drawLaneScene(
   ctx.rect(0, 0, width, clipBottom);
   ctx.clip();
   drawMergedBodies(ctx, geometry, appearance, settings, frame, merged.groups);
-  drawNoteLinks(ctx, geometry, appearance, settings, frame, track.notes, merged.mergedSourceIds);
+  // A link whose origin has already been hit keeps growing out of the hit line
+  // until the target crosses it, so the origin can be older than the visible
+  // window — but never older than the track's longest link span. On the other
+  // side, a link whose origin is more than a screen above the hit line is
+  // entirely off-canvas together with its target (the target is always drawn
+  // above the origin), which bounds the window exactly.
+  const linkPast = timeMode
+    ? Math.min(frame.visualMs - pastMargin, frame.clockMs - bounds.linkSpanMs - 1)
+    : Math.min(
+        frame.visualTick - pastMargin,
+        tickAtTime(score.timeline, frame.clockMs) - bounds.linkSpanTicks - 1,
+      );
+  const linkAhead = (geometry.hitY + geometry.noteH * 8)
+    / Math.max(0.0001, timeMode ? geometry.pxPerMs : geometry.pxPerTick);
+  const linkFrom = timeMode
+    ? searchNotes(notes, 'timeMs', linkPast, false)
+    : searchNotes(notes, 'tick', linkPast, false);
+  const linkTo = timeMode
+    ? searchNotes(notes, 'timeMs', frame.visualMs + linkAhead, true)
+    : searchNotes(notes, 'tick', frame.visualTick + linkAhead, true);
+  drawNoteLinks(ctx, geometry, appearance, settings, frame, notes, linkFrom, linkTo, merged.mergedSourceIds);
 
   // Tails first, so capsule heads always sit above their own body.
   for (const entry of visible) {
