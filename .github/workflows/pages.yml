@@ -24,9 +24,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Actions are pinned to the newest majors (2026-11): checkout/setup-node
+      # v7, configure-pages v6, upload-pages-artifact v5, deploy-pages v5 all
+      # run on the Node 24 runtime, which clears the deprecation warnings the
+      # older node20-based majors raised on the 2026-10 runner image migration.
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -52,9 +56,9 @@ jobs:
           test -f dist/assets/alphaTab.worker.js
           test -f dist/assets/soundfont/sonivox.sf2
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
@@ -66,4 +70,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
